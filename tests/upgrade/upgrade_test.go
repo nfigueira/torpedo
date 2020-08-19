@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -39,6 +40,10 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 		ValidateApplications(contexts)
 
+		Step(fmt.Sprintf("Delay before upgrade volume driver %s", Inst().StorageDriverUpgradeDelay), func() {
+			time.Sleep(Inst().StorageDriverUpgradeDelay)
+		})
+
 		Step("start the upgrade of volume driver", func() {
 			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
 				Inst().StorageDriverUpgradeEndpointVersion,
@@ -52,13 +57,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			}
 		})
 
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts)

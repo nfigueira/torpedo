@@ -82,6 +82,7 @@ const (
 	chaosLevelFlag                       = "chaos-level"
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
+	storageUpgradeEndpointDelay          = "storage-upgrade-delay"
 	provisionerFlag                      = "provisioner"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
@@ -101,6 +102,7 @@ const (
 	defaultChaosLevel                     = 5
 	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com/upgrade"
 	defaultStorageUpgradeEndpointVersion  = "2.1.1"
+	defaultStorageUpgradeDelay            = 1 * time.Second
 	defaultStorageProvisioner             = "portworx"
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
@@ -843,6 +845,7 @@ type Torpedo struct {
 	ScaleFactor                         int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
+	StorageDriverUpgradeDelay           time.Duration
 	EnableStorkUpgrade                  bool
 	MinRunTimeMins                      int
 	ChaosLevel                          int
@@ -873,6 +876,7 @@ func ParseFlags() {
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
 	var volUpgradeEndpointVersion string
+	var volUpgradeDelay time.Duration
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
@@ -904,6 +908,8 @@ func ParseFlags() {
 		"Endpoint URL link which will be used for upgrade storage driver")
 	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
 		"Endpoint version which will be used for checking version after upgrade storage driver")
+	flag.DurationVar(&volUpgradeDelay, storageUpgradeEndpointDelay, defaultStorageUpgradeDelay,
+		"Delay before upgrade storage driver")
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
@@ -974,6 +980,7 @@ func ParseFlags() {
 				ChaosLevel:                          chaosLevel,
 				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
+				StorageDriverUpgradeDelay:           volUpgradeDelay,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				Provisioner:                         provisionerName,
