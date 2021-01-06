@@ -93,6 +93,7 @@ const (
 
 	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
+	pvcLabelsAnnotationKey        = "torpedo.io/pvclabels-enabled"
 	pvcNodesAnnotationKey         = "torpedo.io/pvcnodes-enabled"
 	deleteStrategyAnnotationKey   = "torpedo.io/delete-strategy"
 	specObjAppWorkloadSizeEnvVar  = "SIZE"
@@ -826,8 +827,14 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		obj.Namespace = ns.Name
 		k.substituteNamespaceInPVC(obj, ns.Name)
-		if len(options.Labels) > 0 {
-			k.addLabelsToPVC(obj, options.Labels)
+
+		if pvcLabelsAnnotationValue, ok := obj.Annotations[pvcLabelsAnnotationKey]; ok {
+			pvcLabelsEnabled, _ := strconv.ParseBool(pvcLabelsAnnotationValue)
+			if pvcLabelsEnabled {
+				if len(options.Labels) > 0 {
+					k.addLabelsToPVC(obj, options.Labels)
+				}
+			}
 		}
 
 		if pvcNodesAnnotationValue, ok := obj.Annotations[pvcNodesAnnotationKey]; ok {

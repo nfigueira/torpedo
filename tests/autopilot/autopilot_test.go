@@ -736,17 +736,20 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduleOptions)
 
 		for _, apRule := range apRules {
-			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateNormal),
+			err := waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateNormal),
 				string(apapi.RuleStateTriggered)})
-
-			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsPending),
-				string(apapi.RuleStateActiveActionsInProgress)})
-
-			err := Inst().V.ValidateRebalanceJobs()
 			Expect(err).NotTo(HaveOccurred())
 
-			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
+			err = waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsPending),
+				string(apapi.RuleStateActiveActionsInProgress)})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = Inst().V.ValidateRebalanceJobs()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
 				string(apapi.RuleStateNormal)})
+			Expect(err).NotTo(HaveOccurred())
 		}
 
 		Step("destroy apps", func() {
@@ -775,17 +778,20 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
 		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduleOptions)
 
 		for _, apRule := range apRules {
-			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateNormal),
+			err := waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateNormal),
 				string(apapi.RuleStateTriggered)})
-
-			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsPending),
-				string(apapi.RuleStateActiveActionsInProgress)})
-
-			err := Inst().V.ValidateRebalanceJobs()
 			Expect(err).NotTo(HaveOccurred())
 
-			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
+			err = waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsPending),
+				string(apapi.RuleStateActiveActionsInProgress)})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = Inst().V.ValidateRebalanceJobs()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
 				string(apapi.RuleStateNormal)})
+			Expect(err).NotTo(HaveOccurred())
 		}
 
 		Step("destroy apps", func() {
@@ -866,8 +872,9 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), fu
 			err := Inst().V.ValidateRebalanceJobs()
 			Expect(err).NotTo(HaveOccurred())
 
-			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
+			err = waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
 				string(apapi.RuleStateNormal)})
+			Expect(err).NotTo(HaveOccurred())
 		}
 
 		Step("destroy apps", func() {
@@ -877,6 +884,91 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), fu
 				TearDownContext(ctx, opts)
 			}
 		})
+	})
+})
+
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func() {
+	It("has to create couple volumes on the same pool, run rebalance, resize PVC, validate rebalance, PVC sizes and teardown apps", func() {
+		var contexts []*scheduler.Context
+		testName := strings.ToLower(fmt.Sprintf("%sRebalanceProvsMeanAndPvc", testSuiteName))
+
+		rebalanceApRules := []apapi.AutopilotRule{
+			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-50", "20"}),
+		}
+
+		pvcApRules := []apapi.AutopilotRule{
+			aututils.PVCRuleByTotalSize(10, 50, ""),
+		}
+
+		for i := range rebalanceApRules {
+			rebalanceApRules[i].Spec.ActionsCoolDownPeriod = int64(60)
+		}
+
+		workerNodes := node.GetWorkerNodes()
+
+		Step("schedule applications for pool rebalance", func() {
+			for _, apRule := range rebalanceApRules {
+				_, err := Inst().S.CreateAutopilotRule(apRule)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("schedule applications for PVC resize", func() {
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				for id, apRule := range pvcApRules {
+					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
+					apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
+					labels := map[string]string{
+						"autopilot": apRule.Name,
+					}
+					apRule.Spec.ActionsCoolDownPeriod = int64(60)
+					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Inst().Provisioner,
+						AutopilotRule:      apRule,
+						Labels:             labels,
+						PvcNodesAnnotation: workerNodes[0].Id,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(context).NotTo(BeEmpty())
+					contexts = append(contexts, context...)
+				}
+			}
+		})
+
+		Step("validate rebalance jobs", func() {
+			for _, apRule := range rebalanceApRules {
+
+				err := waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateNormal),
+					string(apapi.RuleStateTriggered)})
+				Expect(err).NotTo(HaveOccurred())
+
+				err = waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsPending),
+					string(apapi.RuleStateActiveActionsInProgress)})
+				Expect(err).NotTo(HaveOccurred())
+
+				err = Inst().V.ValidateRebalanceJobs()
+				Expect(err).NotTo(HaveOccurred())
+
+				err = waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
+					string(apapi.RuleStateNormal)})
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
 	})
 })
 
@@ -977,7 +1069,7 @@ func waitForAutopilotEvent(apRule apapi.AutopilotRule, reason string, messages [
 		}
 
 		if ruleReasonFound && ruleMessageFound {
-			return nil, false, fmt.Errorf("autopilot rule has event with %s reason and %v messages", reason, messages)
+			return nil, false, nil
 		}
 
 		return nil, true, fmt.Errorf("autopilot rule has no event with %s reason and %v message", reason, messages)
